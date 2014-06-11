@@ -8,7 +8,7 @@
 Nsite <- 50
 Ncov <- 15
 Nspecies <- 15
-J <- 4
+J <- 3
 
 # species-specific intercepts:
 alpha <- rnorm(Nspecies, 0, 1)
@@ -20,17 +20,18 @@ Xcov <- matrix(rnorm(Nsite*Ncov),
 # I'll assume 5 of the 15 covariates have significant effects
 # One out of the 5 has only a fixed effect
 # Four out of the 5 have random effects 
-
+# You can play around with the mean variance of effects:
 Beta <- array(0, dim=c(Nspecies, Ncov))
 Beta[, 1] <- rnorm(Nspecies, 1.5, 0.5)
 Beta[, 2] <- rnorm(Nspecies, -1, 0.5)
-Beta[, 3] <- rnorm(Nspecies, -.5, 0.5)
+Beta[, 3] <- rnorm(Nspecies, -.75, 0.5)
 Beta[, 4] <- rnorm(Nspecies, .5, 0.5)
-Beta[, 5] <- rnorm(Nspecies, 1, 0.05)
-Beta[, 6:Ncov] <- rnorm(Nspecies*10, 0, 0.02)
+Beta[, 5] <- rnorm(Nspecies, 1, 0.005) #Fixed factor
+Beta[, 6:Ncov] <- rnorm(Nspecies*10, 0, 0.05)
 
 # species-specific detection probs
 p0 <- runif(Nspecies, 0.35, 1)
+p0
 
 #### Occupancy states ####
 
@@ -46,11 +47,6 @@ for(n in 1:Nspecies){
   }
 }
 
-
-for(i in 27:39){
-  hh[(t+1):(t+T),] <- cbind(h[,1:25], h[,i], names(h)[i])
-  t <- t+T
-}
 
 ################################################
 # END Simulate data
@@ -85,6 +81,8 @@ for(i in 1:Nspecies){
 # All sites surveyed same # times:
 J <- rep(J, times=Nspecies*Nsite)
 
+# Number of total observations
+Nobs <- Nspecies*Nsite
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
 
@@ -105,8 +103,8 @@ jags_d <- list(Y=Y,
                J=J)
 
 # parameters:
-params <- c("alpha", "betas", "I", "tau.beta", "p.detect", "p.include", 
-            "sd.beta.post")
+params <- c("alpha", "betas", "I", "p.detect", 
+            "p.include", "sd.beta.post")
 
 jinits <- function() {
   list(
@@ -117,17 +115,17 @@ jinits <- function() {
 }
 
 # initialize model:
-
+# This assumes you can run three parallel chains. Change accordingly.
 library(doParallel)
 cl <- makeCluster(3)
 registerDoParallel(cl)
 
 jags.parsamps <- NULL
 jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
-  #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
+  setwd("~/GitHub/MLM_EcologyInSilico")
   store<-1000
-  nadap<-50000
-  nburn<-50000
+  nadap<-20000
+  nburn<-30000
   thin<-50
   mod <- jags.model(file = "MLM_model.txt", 
                     data = jags_d, n.chains = 1, n.adapt=nadap,
@@ -162,15 +160,15 @@ p.include.df <- ggs(bundle, family="p.include")
 
 ggs_Rhat(alpha.df)
 ggs_Rhat(beta.df)
-ggs_Rhat(tau.beta.df)
+ggs_Rhat(sd.beta.df)
 ggs_Rhat(p.detect.df)
 ggs_Rhat(p.include.df)
 
 quartz(height=4, width=11)
-#x11(height=4, width=11)
+x11(height=4, width=11)
 caterplot(bundle, parms="betas", horizontal=F, random=50)
 
-caterplot(bundle, parms="tau.beta", horizontal=F, val.lim=c(-1, 10))
+caterplot(bundle, parms="sd.beta.post", horizontal=F)
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
 
@@ -217,7 +215,7 @@ ordered.mods[1:5, ]
 
 # X_best for best covariates:
 
-X_best <- X[, c(1,10,11,14,17)]
+X_best <- X[, c(1:5)]
 Ncov <- ncol(X_best)
 
 # data:
@@ -249,8 +247,8 @@ jags.parsamps <- NULL
 jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
   store<-1000
-  nadap<-50000
-  nburn<-50000
+  nadap<-20000
+  nburn<-30000
   thin<-50
   mod <- jags.model(file = "MLM_model_Best.txt", 
                     data = jags_d_best, n.chains = 1, n.adapt=nadap,
@@ -288,7 +286,8 @@ ggs_Rhat(p.detect.df.best)
 
 quartz(height=4, width=11)
 x11(height=4, width=11)
-caterplot(bundle_best, parms="betas", horizontal=F, random=50)
+caterplot(bundle_best, parms="betas", horizontal=F)
+caterpoints(as.vector(Beta)[1:(Nspecies*Ncov)], horizontal=F)
 caterplot(bundle_best, parms="sd.beta.post", horizontal=F)
 
 ################################################
@@ -307,8 +306,8 @@ for(i in 1:Ncov){
   hdi.sd[i, ] <- hdi
 }
 hdi.sd
-# Fixed: ACSA
-# Random: Elevation, LITU, CA, 
+# The model estimated that only covariates 1, 3, and 4 were random;
+# covariates 2 and 5 were estimated as fixed 
 
 
 ################################################
@@ -341,8 +340,8 @@ jags.parsamps <- NULL
 jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
   store<-1000
-  nadap<-50000
-  nburn<-50000
+  nadap<-20000
+  nburn<-30000
   thin<-50
   mod <- jags.model(file = "MLM_model_NoRandom.txt", 
                     data = jags_d_best, n.chains = 1, n.adapt=nadap,
@@ -401,10 +400,10 @@ for(i in 1:Nobs){
 ################################################
 MLM.fitted <- array(linpred.best - linpred.norand, c(Nobs/Nspecies, Nspecies))
 
-rownames(MLM.fitted)=c(1:54)
-colnames(MLM.fitted)=c("ACRA","ARTR","CATH","CHMA","DILA","GALA","GEMA","LISU","POBI","SACA","THDI","TRGR","UVGR","VIRO")
-
+rownames(MLM.fitted)=c(1:Nsite)
+colnames(MLM.fitted)=paste0("Species", 1:Nspecies)
 # standardize over spp
+
 MLM.fitted.standard <- MLM.fitted
 for(j in 1:Nspecies){
   MLM.fitted.standard[,j] <- (MLM.fitted[,j]-mean(MLM.fitted[,j]))/sd(MLM.fitted[,j])
@@ -415,8 +414,8 @@ U <- svd(ss)
 mlm.fit <- MLM.fitted.standard %*% U$v
 mlm.fit <- mlm.fit[,1:2]
 
-# environmental variables (only those with random effects)
-envir.vars <- cbind(hh$Elevation, hh$LITU, hh$Ca)
+# environmental variables (only those with significant random effects)
+envir.vars <- Xcov[, c(1,3,4)]
 mlm.envir <- NULL
 for(j in 1:ncol(envir.vars)){
   mlm.envir <- cbind(mlm.envir, envir.vars[,j]*mlm.fit[,1],envir.vars[,j]*mlm.fit[,2])
@@ -425,14 +424,16 @@ for(j in 1:ncol(envir.vars)){
 envir.points <- t(array(colMeans(mlm.envir),c(2,dim(mlm.envir)[2]/2)))
 
 # plot mlm
-par(mfcol=c(1,1))
+
 x11(height=5, width=5)
 plot(-mlm.fit,xlab="PC1",ylab="PC2",type="n")
-text(-mlm.fit,label=c(1:(Nobs/Nspecies)),cex=.5)
+#text(-mlm.fit,label=c(1:(Nobs/Nspecies)),cex=.5)
+points(-mlm.fit, pch=19, cex=0.5)
 
 arrow.coordMLM <- cbind(array(0,dim(envir.points)),-envir.points)
 
-arrows(arrow.coordMLM[,1],arrow.coordMLM[,2],arrow.coordMLM[,3],arrow.coordMLM[,4], col="black", length=0.1)
+arrows(arrow.coordMLM[,1],arrow.coordMLM[,2],arrow.coordMLM[,3],arrow.coordMLM[,4], 
+       code=2, col="black", length=0.05, lwd=.8)
 
-text(1.3*-envir.points,label=c("Elevation", "LITU", "Ca"),cex=.7)
+text(1.3*-envir.points,label=c("Cov1", "Cov3", "Cov4"),cex=1, font=2)
 
