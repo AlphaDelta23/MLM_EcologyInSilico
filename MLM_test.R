@@ -104,16 +104,9 @@ jags_d <- list(Y=Y,
                Nobs=Nobs,
                J=J)
 
-# zinit <- NULL
-# zinit <- ifelse(Y > 0, 1, 0)
-
-
-# set wd:
-setwd("~/Documents/Thesis Research/CA metacoms/CAmetacomsCode/MLM_Var.Select")
-
 # parameters:
 params <- c("alpha", "betas", "I", "tau.beta", "p.detect", "p.include", 
-            "sd.beta.post", "psi")
+            "sd.beta.post")
 
 jinits <- function() {
   list(
@@ -152,17 +145,6 @@ bundle <- list(jags.parsamps[[1]][[1]],
 class(bundle) <- "mcmc.list"
 
 stopCluster(cl)
-
-# # initialize model:
-# mod <- NULL
-# mod <- jags.model(file = "MLM_model.txt", 
-#                   data = jags_d, n.chains = 3, n.adapt=nadap,
-#                   inits = list(z=zinit))
-# update(mod, n.iter=nburn)
-# 
-# out <- NULL
-# out <- coda.samples(mod, n.iter = store*thin, variable.names = params, thin=thin)
-
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
 
