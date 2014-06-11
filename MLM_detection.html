@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- saved from url=(0014)about:internet -->
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=9" >
+
+<title>Multilevel modeling to determine covariate effects on community composition</title>
+
+<style type="text/css">
+body, td {
+   font-family: sans-serif;
+   background-color: white;
+   font-size: 12px;
+   margin: 8px;
+}
+
+tt, code, pre {
+   font-family: 'DejaVu Sans Mono', 'Droid Sans Mono', 'Lucida Console', Consolas, Monaco, monospace;
+}
+
+h1 { 
+   font-size:2.2em; 
+}
+
+h2 { 
+   font-size:1.8em; 
+}
+
+h3 { 
+   font-size:1.4em; 
+}
+
+h4 { 
+   font-size:1.0em; 
+}
+
+h5 { 
+   font-size:0.9em; 
+}
+
+h6 { 
+   font-size:0.8em; 
+}
+
+a:visited {
+   color: rgb(50%, 0%, 50%);
+}
+
+pre {	
+   margin-top: 0;
+   max-width: 95%;
+   border: 1px solid #ccc;
+   white-space: pre-wrap;
+}
+
+pre code {
+   display: block; padding: 0.5em;
+}
+
+code.r, code.cpp {
+   background-color: #F8F8F8;
+}
+
+table, td, th {
+  border: none;
+}
+
+blockquote {
+   color:#666666;
+   margin:0;
+   padding-left: 1em;
+   border-left: 0.5em #EEE solid;
+}
+
+hr {
+   height: 0px;
+   border-bottom: none;
+   border-top-width: thin;
+   border-top-style: dotted;
+   border-top-color: #999999;
+}
+
+@media print {
+   * { 
+      background: transparent !important; 
+      color: black !important; 
+      filter:none !important; 
+      -ms-filter: none !important; 
+   }
+
+   body { 
+      font-size:12pt; 
+      max-width:100%; 
+   }
+       
+   a, a:visited { 
+      text-decoration: underline; 
+   }
+
+   hr { 
+      visibility: hidden;
+      page-break-before: always;
+   }
+
+   pre, blockquote { 
+      padding-right: 1em; 
+      page-break-inside: avoid; 
+   }
+
+   tr, img { 
+      page-break-inside: avoid; 
+   }
+
+   img { 
+      max-width: 100% !important; 
+   }
+
+   @page :left { 
+      margin: 15mm 20mm 15mm 10mm; 
+   }
+     
+   @page :right { 
+      margin: 15mm 10mm 15mm 20mm; 
+   }
+
+   p, h2, h3 { 
+      orphans: 3; widows: 3; 
+   }
+
+   h2, h3 { 
+      page-break-after: avoid; 
+   }
+}
+
+</style>
+
+
+
+<!-- MathJax scripts -->
+<script type="text/javascript" src="https://c328740.ssl.cf1.rackcdn.com/mathjax/2.0-latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+
+</head>
+
+<body>
+<h1>Multilevel modeling to determine covariate effects on community composition</h1>
+
+<p>A common goal of community ecology is to understand how and why species composition shifts across space. Common techniques to discover which environmental covariates might lead to such shifts include redundancy analysis (RDA), canonical correspondence analysis (CCA), and nonmetric multi-dimensional scaling (NMDS), each paired with permutation tests. However, as brought to light by Jackson et al. (2012: Ecography), these ordination techniques do not discern species-level covariate effects. Thus, it becomes difficult to attribute community-level patterns to species-level effects.  </p>
+
+<p>Jackson et al. (2012) propose the use of multilevel models that estimate species-level random and fixed covariate effects to determine the relative contribution of covariates to changing composition. For incidence data, the model looks like:
+\[ Y_{q} \sim Bern(\mu_{q}) \]
+\[ \mu_{q} = logit^{-1}(\alpha_{spp[q]} + b_{spp[q]}  x_{site[q]}) \]
+\[ \alpha_{spp[q]} \sim N(\mu_{\alpha}, \sigma_{intercept}^2) \]
+\[ b_{spp[q]} \sim N(\mu_{b}, \sigma_{slope}^2) \]</p>
+
+<p>Here \( Y_q \) is the presences/absence of each species at each site (\( q=1, ... , NM, \) where \( N \) is the number of species and \( M \) is the number of sites). In practice, the data set would have species in long data format. This model can also be extended to incorporate any number of covariates (e.g. matrix notation \( \beta_{spp[q]} X_{site[q]} \)).</p>
+
+<p>In this model, determining covariate effects on species composition involves testing whether \( \sigma_{slope}^2 \) of any covariate differs significantly from zero. In other words, the model tests whether species respond differentially to particular covariates, which means composition should change along gradients of those particular covariates. </p>
+
+<p>Jackson et al. (2012) provide code to implement their model on a data set of Southern Appalachian understory herbs using the <em>R</em> package <em>lme4</em> and maximum likelihood techniques. However, a simple extension of Jackson and colleague&#39;s work would be to correct for detection error using repeat surveys (e.g. multi-species occupancy modeling). This should reduce bias in assigning covariate effects. Specifically, the model could be changed slightly to:</p>
+
+<p>\[ Y_{q} \sim Binom(z_q p_{spp[q]}, J_q) \]
+\[ z_q \sim Bern(\mu_q) \]
+\[ \mu_{q} = logit^{-1}(\alpha_{spp[q]} + b_{spp[q]}  x_{site[q]}) \]
+\[ \alpha_{spp[q]} \sim N(\mu_{\alpha}, \sigma_{intercept}^2) \]
+\[ b_{spp[q]} \sim N(\mu_{b}, \sigma_{slope}^2) \]</p>
+
+<p>Now \( Y_q \) is the number of times each species is observed at each site over \( J \) surveys. \( p_{spp[q]} \) represents the species-specific probability that the species will be observed in a survey when present, and \( z_q \) represents the &#39;true&#39; occurence of the species, moderated by occurrence probability, \( \mu_q \). </p>
+
+</body>
+
+</html>
+

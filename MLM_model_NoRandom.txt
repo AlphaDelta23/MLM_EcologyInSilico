@@ -1,0 +1,46 @@
+model {
+  ### PRIORS ###
+  for(i in 1:Nspecies){
+    alpha[i] ~ dnorm(logit(psi.mean), psi.tau)T(-12,12)
+    lp.detect[i] ~ dnorm(logit(p.detect.mean), p.detect.tau)T(-12,12)
+    p.detect[i] <-  1/(1+exp(-lp.detect[i]))
+  }
+  for(j in 1:Ncov){
+    mean.beta[j] ~ dnorm(meta.mean.beta, meta.tau.beta)
+    
+    sd.beta[j] ~ dnorm(0, .001)T(0,100) # each covariate has a uncorrelated beta stdev.
+    tau.beta[j] <- pow(sd.beta[j]+0.001, -2)
+  }
+  
+  # Heirarchical Priors #
+  psi.mean ~ dbeta(1,1)
+  p.detect.mean ~ dbeta(1,1)
+  
+  meta.mean.beta ~ dnorm(0,0.01)
+  meta.sd.beta ~ dunif(0,50)
+  meta.tau.beta <- pow(meta.sd.beta, -2)
+  
+  sd.psi ~ dunif(0,50)
+  psi.tau <- pow(sd.psi, -2)
+  
+  sd.p.detect ~ dunif(0,50)
+  p.detect.tau <- pow(sd.p.detect, -2)
+  
+  #--------------------------------------------------------------------------
+  #--------------------------------------------------------------------------
+  
+  # Likelihood model:
+  for(i in 1:Nobs){
+    logit(psi[i]) <- alpha[Species[i]] + inprod(betas[], X[i, ])
+    z[i] ~ dbern(psi[i])
+    Y[i] ~ dbinom(z[i]*p.detect[Species[i]], J[i])
+  }
+  
+  # Deal with covariates:
+  # Assume no random effects:
+  for(j in 1:Ncov){
+    betas[j] ~ dnorm(mean.beta[j], tau.beta[j])
+  }
+  
+  
+}
