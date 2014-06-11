@@ -2,44 +2,58 @@
 # Data from: Jackson et al. 2012
 
 ################################################
-# load data
+# Simulate data
 ################################################
-# set wd
-setwd("~/Documents/Thesis Research/CA metacoms/CAmetacomsCode/MLM_Var.Select")
-# use file "MLM_dataset.csv"
-h <- read.csv("MLM_dataset.csv")
-# remove sites with no species
-h <- h[-3,]
 
-#Normalize predictor variables:
-for(i in 5:25){h[,i] <- (h[,i] - mean(h[,i]))/sd(h[,i])} 
+Nsite <- 50
+Ncov <- 15
+Nspecies <- 15
+J <- 4
 
-hh <- cbind(h[,1:26],factor('ACRA')) 
-names(hh)[26] <- 'PRESENCE' 
+# species-specific intercepts:
+alpha <- rnorm(Nspecies, 0, 1)
 
-names(hh)[27] <- 'SPP' 
-levels(hh$SPP) <- c("ACRA","ARTR","CATH","CHMA","DILA","GALA","GEMA","LISU","POBI","SACA","THDI","TRGR","UVGR","VIRO")
+# covariate values
+Xcov <- matrix(rnorm(Nsite*Ncov), 
+               nrow=Nsite, ncol=Ncov)
 
-T <- dim(h)[1] 
-T #[1] 54
-t <- T 
-t  #[1] 54
-names(hh)
+# I'll assume 5 of the 15 covariates have significant effects
+# One out of the 5 has only a fixed effect
+# Four out of the 5 have random effects 
+
+Beta <- array(0, dim=c(Nspecies, Ncov))
+Beta[, 1] <- rnorm(Nspecies, 1.5, 0.5)
+Beta[, 2] <- rnorm(Nspecies, -1, 0.5)
+Beta[, 3] <- rnorm(Nspecies, -.5, 0.5)
+Beta[, 4] <- rnorm(Nspecies, .5, 0.5)
+Beta[, 5] <- rnorm(Nspecies, 1, 0.05)
+Beta[, 6:Ncov] <- rnorm(Nspecies*10, 0, 0.02)
+
+# species-specific detection probs
+p0 <- runif(Nspecies, 0.35, 1)
+
+#### Occupancy states ####
+
+Yobs <- array(0, dim = c(Nspecies, Nsite)) # Simulated observations
+
+for(n in 1:Nspecies){
+  for(k in 1:Nsite){
+    lpsi <- alpha[n] + Beta[n, ] %*% Xcov[k, ] # Covariate effects on occurrence 
+    psi <- 1/(1+exp(-lpsi)) #anti-logit
+    
+    z <- rbinom(1, 1, psi) # True Occupancy
+    Yobs[n, k] <- rbinom(1, J, p0[n] * z) # Observed Occupancy
+  }
+}
+
 
 for(i in 27:39){
   hh[(t+1):(t+T),] <- cbind(h[,1:25], h[,i], names(h)[i])
   t <- t+T
 }
-t #756
-
-hh$Elevation2 <- hh$Elevation^2
-hh$LITU2 <- hh$LITU^2
-hh$Ca2 <- hh$Ca^2
-hh$P2 <- hh$P^2
-hh$Herb2=hh$Herb^2
 
 ################################################
-# end load data
+# END Simulate data
 ################################################
 
 #--------------------------------------------------------------------------
@@ -48,30 +62,29 @@ hh$Herb2=hh$Herb^2
 ################################################
 # Format data for model
 ################################################
-# All data for Bayesian model:
-X <- hh[, c(5:25, 28:32)] #include all covariates
-Y <- hh$PRESENCE
-Species <- as.factor(as.numeric(hh$SPP))
-Nspecies <- length(levels(Species))
-Ncov <- ncol(X)
-Nobs <- length(Y)
-J <- rep(5, times=Nobs)
-  
-# Convert Y (pres/abs) to binomial based on simulated species detection probs.
-ps <- runif(Nspecies, 0.25, 1)
-pdetect <- rep(ps, each=54) # each species has 54 sites
-for(i in 1:Nobs){
-  if(Y[i] ==1){
-    Y[i] <- rbinom(1, 5, pdetect[i])
-  }
+# X needs to have repeated covariates for each species, long form
+X <- array(0, dim=c(Nsite*Nspecies, Ncov))
+t <- 1; i <- 1
+TT <- Nsite
+while(i <= Nspecies){
+  X[t:TT, ] <- Xcov
+  t <- t+Nsite
+  TT <- TT + Nsite
+  i <- i+1
 }
 
-# Some of the X variables are highly correlated:
-# Keep CA, Elevation
-# Remove: OM, N, Mg, pH, K, Litu2, Ca2
+# Species
+Species <- rep(c(1:Nspecies), each=Nsite)
 
-X <- X[, -c(15,20,17,14,19,23)]
-Ncov <- ncol(X)
+# Observations/data:
+Y <- NULL
+for(i in 1:Nspecies){
+  Y <- c(Y, Yobs[i, ])
+}
+
+# All sites surveyed same # times:
+J <- rep(J, times=Nspecies*Nsite)
+
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
 
