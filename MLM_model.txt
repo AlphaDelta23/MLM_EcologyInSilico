@@ -7,17 +7,14 @@ model {
   }
   for(j in 1:Ncov){
     mean.beta[j] ~ dnorm(meta.mean.beta, meta.tau.beta)
-    sd.beta[j] ~ dnorm(0, .001)T(0,100) # each covariate has a uncorrelated beta stdev.
+    sd.beta[j] ~ dnorm(0, .001)T(0,100)
     tau.beta[j] <- pow(sd.beta[j]+0.001, -2)
 
-    #lp.include[j] ~ dnorm(logit(p.include.mean), p.include.tau)T(-12,12)
-    #p.include[j] <-  1/(1+exp(-lp.include[j]))
   }
   
   # Heirarchical Priors #
   psi.mean ~ dbeta(1,1)
   p.detect.mean ~ dbeta(1,1)
-  #p.include.mean ~ dbeta(1,1)
   p.include ~ dbeta(1,1)
 
   meta.mean.beta ~ dnorm(0,0.01)
