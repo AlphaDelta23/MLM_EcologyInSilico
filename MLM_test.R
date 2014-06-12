@@ -18,14 +18,14 @@ Xcov <- matrix(rnorm(Nsite*Ncov),
                nrow=Nsite, ncol=Ncov)
 
 # I'll assume 5 of the 15 covariates have significant effects
-# One out of the 5 has only a fixed effect
-# Four out of the 5 have random effects 
-# You can play around with the mean variance of effects:
+# One out of the 5 has only a fixed effect; Four out of the 5 have random effects 
+# Remember, these are on the logit scale, so very high/low values will have large effects 
+# and might swamp out smaller ones in the model. 
 Beta <- array(0, dim=c(Nspecies, Ncov))
-Beta[, 1] <- rnorm(Nspecies, 1.5, 0.5)
-Beta[, 2] <- rnorm(Nspecies, -1, 0.5)
-Beta[, 3] <- rnorm(Nspecies, -.75, 0.5)
-Beta[, 4] <- rnorm(Nspecies, .5, 0.5)
+Beta[, 1] <- rnorm(Nspecies, 1.75, 0.75)
+Beta[, 2] <- rnorm(Nspecies, -1, 0.75)
+Beta[, 3] <- rnorm(Nspecies, -.5, 0.75)
+Beta[, 4] <- rnorm(Nspecies, .5, 0.75)
 Beta[, 5] <- rnorm(Nspecies, 1, 0.005) #Fixed factor
 Beta[, 6:Ncov] <- rnorm(Nspecies*10, 0, 0.05)
 
@@ -125,7 +125,7 @@ jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   setwd("~/GitHub/MLM_EcologyInSilico")
   store<-1000
   nadap<-20000
-  nburn<-30000
+  nburn<-50000
   thin<-50
   mod <- jags.model(file = "MLM_model.txt", 
                     data = jags_d, n.chains = 1, n.adapt=nadap,
@@ -198,12 +198,11 @@ sum(model.probabilities)
 ordered.mod.probs <- model.probabilities[order(-model.probabilities)]
 ordered.mods <- uniquemods[order(-model.probabilities), ]
 
-ordered.mod.probs[1:10]
-ordered.mods[1:5, ]
+ordered.mod.probs
+ordered.mods
 
-# Best model probability: 0.58 (followed by 0.087)
-# Includes variables: c(1,10,11,14,17)
-# Elevation, ACSA, LITU, Ca, Elevation2
+# Best model probability: 0.986, next 0.0057
+# Includes variables: 1-5
 
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
@@ -248,7 +247,7 @@ jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
   store<-1000
   nadap<-20000
-  nburn<-30000
+  nburn<-50000
   thin<-50
   mod <- jags.model(file = "MLM_model_Best.txt", 
                     data = jags_d_best, n.chains = 1, n.adapt=nadap,
@@ -306,8 +305,7 @@ for(i in 1:Ncov){
   hdi.sd[i, ] <- hdi
 }
 hdi.sd
-# The model estimated that only covariates 1, 3, and 4 were random;
-# covariates 2 and 5 were estimated as fixed 
+# The model estimated that only covariate 5 has a fixed effect
 
 
 ################################################
@@ -341,7 +339,7 @@ jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
   store<-1000
   nadap<-20000
-  nburn<-30000
+  nburn<-50000
   thin<-50
   mod <- jags.model(file = "MLM_model_NoRandom.txt", 
                     data = jags_d_best, n.chains = 1, n.adapt=nadap,
@@ -415,7 +413,7 @@ mlm.fit <- MLM.fitted.standard %*% U$v
 mlm.fit <- mlm.fit[,1:2]
 
 # environmental variables (only those with significant random effects)
-envir.vars <- Xcov[, c(1,3,4)]
+envir.vars <- Xcov[, c(1:4)]
 mlm.envir <- NULL
 for(j in 1:ncol(envir.vars)){
   mlm.envir <- cbind(mlm.envir, envir.vars[,j]*mlm.fit[,1],envir.vars[,j]*mlm.fit[,2])
@@ -435,5 +433,5 @@ arrow.coordMLM <- cbind(array(0,dim(envir.points)),-envir.points)
 arrows(arrow.coordMLM[,1],arrow.coordMLM[,2],arrow.coordMLM[,3],arrow.coordMLM[,4], 
        code=2, col="black", length=0.05, lwd=.8)
 
-text(1.3*-envir.points,label=c("Cov1", "Cov3", "Cov4"),cex=1, font=2)
+text(1.3*-envir.points,label=c("Cov1", "Cov2", "Cov3", "Cov4"),cex=1, font=2)
 
