@@ -6,8 +6,8 @@
 ################################################
 
 Nsite <- 50
-Ncov <- 15
-Nspecies <- 15
+Ncov <- 3
+Nspecies <- 20
 J <- 3
 
 # species-specific intercepts:
@@ -17,24 +17,19 @@ alpha <- rnorm(Nspecies, 0, 1)
 Xcov <- matrix(rnorm(Nsite*Ncov), 
                nrow=Nsite, ncol=Ncov)
 
-# I'll assume 5 of the 15 covariates have significant effects
-# One out of the 5 has only a fixed effect; Four out of the 5 have random effects 
-# Remember, these are on the logit scale, so very high/low values will have large effects 
-# and might swamp out smaller ones in the model. 
-Beta <- array(0, dim=c(Nspecies, Ncov))
-Beta[, 1] <- rnorm(Nspecies, 1.75, 0.75)
-Beta[, 2] <- rnorm(Nspecies, -1, 0.75)
-Beta[, 3] <- rnorm(Nspecies, -.5, 0.75)
-Beta[, 4] <- rnorm(Nspecies, .5, 0.75)
-Beta[, 5] <- rnorm(Nspecies, 1, 0.005) #Fixed factor
-Beta[, 6:Ncov] <- rnorm(Nspecies*10, 0, 0.05)
+# I'll assume 2 of the 3 covariates have significant effects
+# one of which varies among species 
+Beta <- array(c(rnorm(Nspecies, 0, 1), 
+                rep(1, Nspecies), 
+                rep(0, Nspecies)
+                ), 
+              dim=c(Nspecies, Ncov))
 
 # species-specific detection probs
 p0 <- runif(Nspecies, 0.35, 1)
 p0
 
 #### Occupancy states ####
-
 Yobs <- array(0, dim = c(Nspecies, Nsite)) # Simulated observations
 
 for(n in 1:Nspecies){
@@ -46,14 +41,6 @@ for(n in 1:Nspecies){
     Yobs[n, k] <- rbinom(1, J, p0[n] * z) # Observed Occupancy
   }
 }
-
-
-################################################
-# END Simulate data
-################################################
-
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
 
 ################################################
 # Format data for model
@@ -103,8 +90,7 @@ jags_d <- list(Y=Y,
                J=J)
 
 # parameters:
-params <- c("alpha", "betas", "I", "p.detect", 
-            "p.include", "sd.beta.post")
+params <- c("alpha", "betas", "p.detect", "sd.beta")
 
 jinits <- function() {
   list(
@@ -122,11 +108,11 @@ registerDoParallel(cl)
 
 jags.parsamps <- NULL
 jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
-  setwd("~/GitHub/MLM_EcologyInSilico")
+  setwd("~/R/MLM_EcologyInSilico")
   store<-1000
-  nadap<-20000
-  nburn<-50000
-  thin<-50
+  nadap<-1000
+  nburn<-5000
+  thin<-10
   mod <- jags.model(file = "MLM_model.txt", 
                     data = jags_d, n.chains = 1, n.adapt=nadap,
                     inits = jinits)
@@ -154,140 +140,29 @@ library(mcmcplots)
 alpha.df <- ggs(bundle, family="alpha")
 beta.df <- ggs(bundle, family="betas")
 I.df <- ggs(bundle, family="I")
-sd.beta.df <- ggs(bundle, family="sd.beta.post")
+sd.beta.df <- ggs(bundle, family="sd.beta")
 p.detect.df <- ggs(bundle, family="p.detect")
-p.include.df <- ggs(bundle, family="p.include")
 
-ggs_Rhat(alpha.df)
-ggs_Rhat(beta.df)
-ggs_Rhat(sd.beta.df)
-ggs_Rhat(p.detect.df)
-ggs_Rhat(p.include.df)
+ggs_Rhat(alpha.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
+ggs_Rhat(beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
+ggs_Rhat(sd.beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
+ggs_Rhat(p.detect.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
 
 quartz(height=4, width=11)
 x11(height=4, width=11)
-caterplot(bundle, parms="betas", horizontal=F, random=50)
+caterplot(bundle, parms="betas", random=50)
+caterpoints(c(Beta))
 
-caterplot(bundle, parms="sd.beta.post", horizontal=F)
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
+caterplot(bundle, parms="sd.beta")
+caterpoints(c(1, 0, 0))
 
-################################################
-# Check best model:
-################################################
-
-Ipost <- NULL
-Ipost <- array(dim=c(store*3, Ncov)) # indicator variable array
-for (i in 1:Ncov){
-  string <- paste("I[", i, "]", sep="")
-  Ipost[, i] <- subset(I.df, Parameter==string)$value
-}
-
-# what are the unique models that have nonzero posterior probability?
-uniquemods <- unique(Ipost, MARGIN=1)
-# how many do we have?
-nmods <- dim(uniquemods)[1]
-nmods
-model.probabilities <- rep(NA, nmods)
-for (i in 1:nmods){
-  TFs <- apply(Ipost, 1, function(x) all(x == uniquemods[i,]))
-  model.probabilities[i] <- sum(TFs) / (store*3)
-}
-
-sum(model.probabilities)
-ordered.mod.probs <- model.probabilities[order(-model.probabilities)]
-ordered.mods <- uniquemods[order(-model.probabilities), ]
-
-ordered.mod.probs
-ordered.mods
-
-# Best model probability: 0.986, next 0.0057
-# Includes variables: 1-5
+ggs_caterpillar(ggs(bundle), family="sd.beta") + 
+  xlim(0, 4) + 
+  theme_classic() + 
+  geom_vline(xintercept=0, linetype="dashed")
 
 #--------------------------------------------------------------------------
 #--------------------------------------------------------------------------
-
-################################################
-# Now refit best model:
-################################################
-# (I deleted most of the data, just to save on space)
-
-# X_best for best covariates:
-
-X_best <- X[, c(1:5)]
-Ncov <- ncol(X_best)
-
-# data:
-jags_d_best <- list(Y=Y,
-                    X=X_best,
-                    Species=Species,
-                    Nspecies=Nspecies,
-                    Ncov=Ncov,
-                    Nobs=Nobs,
-                    J=J)
-
-# parameters:
-params_best <- c("alpha", "betas", "p.detect", 
-                "sd.beta.post", "psi")
-jinits <- function() {
-  list(
-    z=ifelse(Y > 0, 1, 0),
-    .RNG.name=c("base::Super-Duper"),
-    .RNG.seed=as.numeric(randomNumbers(n = 1, min = 1, max = 1e+06, col=1))
-  )
-}
-# initialize model:
-
-library(doParallel)
-cl <- makeCluster(3)
-registerDoParallel(cl)
-
-jags.parsamps <- NULL
-jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
-  #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
-  store<-1000
-  nadap<-20000
-  nburn<-50000
-  thin<-50
-  mod <- jags.model(file = "MLM_model_Best.txt", 
-                    data = jags_d_best, n.chains = 1, n.adapt=nadap,
-                    inits = jinits)
-  update(mod, n.iter=nburn)
-  out <- coda.samples(mod, n.iter = store*thin, 
-                      variable.names = params_best, thin=thin)
-  return(out)
-}
-
-bundle_best <- NULL
-bundle_best <- list(jags.parsamps[[1]][[1]],
-               jags.parsamps[[2]][[1]],
-               jags.parsamps[[3]][[1]])
-
-class(bundle_best) <- "mcmc.list"
-
-stopCluster(cl)
-
-################################################
-# Check Convergence:
-################################################
-library(ggmcmc)
-library(mcmcplots)
-alpha.df.best <- ggs(bundle_best, family="alpha")
-beta.df.best <- ggs(bundle_best, family="betas")
-sd.beta.df.best <- ggs(bundle_best, family="sd.beta.post")
-p.detect.df.best <- ggs(bundle_best, family="p.detect")
-psi.df.best <- ggs(bundle_best, family="psi")
-
-ggs_Rhat(alpha.df.best)
-ggs_Rhat(beta.df.best)
-ggs_Rhat(sd.beta.df.best)
-ggs_Rhat(p.detect.df.best)
-
-quartz(height=4, width=11)
-x11(height=4, width=11)
-caterplot(bundle_best, parms="betas", horizontal=F)
-caterpoints(as.vector(Beta)[1:(Nspecies*Ncov)], horizontal=F)
-caterplot(bundle_best, parms="sd.beta.post", horizontal=F)
 
 ################################################
 # Check random vs. fixed:
