@@ -1,7 +1,7 @@
 # Testing MLM model with correction for detection probability:
 # Data from: Jackson et al. 2012
 source("calc_waic.R")
-
+library(mcmcplots)
 
 ################################################
 # Simulate data
@@ -9,8 +9,8 @@ source("calc_waic.R")
 
 Nsite <- 100
 Ncov <- 3
-Nspecies <- 25
-J <- 5
+Nspecies <- 20
+J <- 4
 
 # species-specific intercepts:
 alpha <- rnorm(Nspecies, 0, 1)
