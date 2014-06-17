@@ -2,7 +2,7 @@
 # input mcmc.list with posterior sims and data.frame for model input
 # output list: log posterior predictive density, p_WAIC2, WAIC, mean likelihood
 calc_waic <- function(posterior, data){
-  with(jags_d,{
+  with(data,{
     chains <- length(posterior)
     store <- dim(posterior[[1]])[1]
     L <- array(dim=c(Nobs, chains, store))
@@ -19,7 +19,7 @@ calc_waic <- function(posterior, data){
                           paste("p.detect[", Species[i], "]", sep=""))
         pvals <- post_sims[, indx_p]
         L[i, j, ] <- dbinom(rep(Y[i], store), 
-                            size=J, 
+                            size=J[i], 
                             prob = zvals * pvals, 
                             log=TRUE)
       }
