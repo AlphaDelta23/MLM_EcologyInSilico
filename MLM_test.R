@@ -9,26 +9,26 @@ source("calc_waic.R")
 
 Nsite <- 100
 Ncov <- 3
-Nspecies <- 20
-J <- 2
+Nspecies <- 25
+J <- 5
 
 # species-specific intercepts:
 alpha <- rnorm(Nspecies, 0, 1)
 
 # covariate values
-Xcov <- matrix(rnorm(Nsite*Ncov), 
+Xcov <- matrix(rnorm(Nsite*Ncov, 0, 2), 
                nrow=Nsite, ncol=Ncov)
 
 # I'll assume 2 of the 3 covariates have effects that vary among species
 Beta <- array(c(rnorm(Nspecies, 0, 2), 
-                rnorm(Nspecies, 0, 2),
+                rnorm(Nspecies, -1, 1),
                 rep(1, Nspecies)
                 ), 
               dim=c(Nspecies, Ncov)
               )
 
 # species-specific detection probs
-p0 <- runif(Nspecies, 0.35, 1)
+p0 <- plogis(rnorm(Nspecies, 1, 0.5))
 p0
 
 #### Occupancy states ####
@@ -109,6 +109,8 @@ mod0 <- jags.model(file = "model_statements/MLM_model_0f.txt",
 update(mod0, n.iter=nburn)
 out0 <- coda.samples(mod0, n.iter = store*thin, 
                      variable.names = params, thin=thin)
+caterplot(out0, "betas")
+caterpoints(c(Beta))
 WAIC_0f <- calc_waic(posterior=out0, jags_d)
 
 ## Fit other models
@@ -186,9 +188,10 @@ vals <- c(full = WAIC_0f$WAIC,
   allfixed=WAIC_f123$WAIC
   )
 
-plot(factor(names(vals)), vals, type="l", xlab="model", ylab="WAIC")
+plot(factor(names(vals)), vals,  
+     xlab="model", ylab="WAIC")
 
-# correct model is not selected....
+# correct model and full model are best supported....
 
 
 
