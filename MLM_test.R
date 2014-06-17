@@ -1,14 +1,16 @@
 # Testing MLM model with correction for detection probability:
 # Data from: Jackson et al. 2012
+source("calc_waic.R")
+
 
 ################################################
 # Simulate data
 ################################################
 
-Nsite <- 50
+Nsite <- 100
 Ncov <- 3
 Nspecies <- 20
-J <- 3
+J <- 2
 
 # species-specific intercepts:
 alpha <- rnorm(Nspecies, 0, 1)
@@ -17,13 +19,13 @@ alpha <- rnorm(Nspecies, 0, 1)
 Xcov <- matrix(rnorm(Nsite*Ncov), 
                nrow=Nsite, ncol=Ncov)
 
-# I'll assume 2 of the 3 covariates have significant effects
-# one of which varies among species 
-Beta <- array(c(rnorm(Nspecies, 0, 1), 
-                rep(1, Nspecies), 
-                rep(0, Nspecies)
+# I'll assume 2 of the 3 covariates have effects that vary among species
+Beta <- array(c(rnorm(Nspecies, 0, 2), 
+                rnorm(Nspecies, 0, 2),
+                rep(1, Nspecies)
                 ), 
-              dim=c(Nspecies, Ncov))
+              dim=c(Nspecies, Ncov)
+              )
 
 # species-specific detection probs
 p0 <- runif(Nspecies, 0.35, 1)
@@ -77,9 +79,7 @@ Nobs <- Nspecies*Nsite
 # JAGS model run:
 ################################################
 library(rjags)
-library(random)
-load.module("lecuyer")
-load.module("glm")
+
 # data:
 jags_d <- list(Y=Y,
                X=X,
@@ -90,79 +90,134 @@ jags_d <- list(Y=Y,
                J=J)
 
 # parameters:
-params <- c("alpha", "betas", "p.detect", "sd.beta")
+params <- c("alpha", "betas", "p.detect", "sd.beta", "z", "psi")
 
 jinits <- function() {
   list(
-    z=ifelse(Y > 0, 1, 0),
-    .RNG.name=c("base::Super-Duper"),
-    .RNG.seed=as.numeric(randomNumbers(n = 1, min = 1, max = 1e+06, col=1))
+    z=ifelse(Y > 0, 1, 0)
   )
 }
 
-# initialize model:
-# This assumes you can run three parallel chains. Change accordingly.
-library(doParallel)
-cl <- makeCluster(3)
-registerDoParallel(cl)
+store<-1000
+nadap<-1000
+nburn<-2000
+thin<-7
+chains <- 3
+mod0 <- jags.model(file = "model_statements/MLM_model_0f.txt", 
+                  data = jags_d, n.chains = chains, n.adapt=nadap,
+                  inits = jinits)
+update(mod0, n.iter=nburn)
+out0 <- coda.samples(mod0, n.iter = store*thin, 
+                     variable.names = params, thin=thin)
+WAIC_0f <- calc_waic(posterior=out0, jags_d)
 
-jags.parsamps <- NULL
-jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
-  setwd("~/R/MLM_EcologyInSilico")
-  store<-1000
-  nadap<-1000
-  nburn<-5000
-  thin<-10
-  mod <- jags.model(file = "MLM_model.txt", 
-                    data = jags_d, n.chains = 1, n.adapt=nadap,
+## Fit other models
+mod1 <- jags.model(file = "model_statements/MLM_model_1f.txt", 
+                   data = jags_d, n.chains = chains, n.adapt=nadap,
+                   inits = jinits)
+update(mod1, n.iter=nburn)
+out1 <- coda.samples(mod1, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out1, "betas")
+caterpoints(c(Beta))
+WAIC_f1 <- calc_waic(posterior=out1, jags_d)
+
+mod2 <- jags.model(file = "model_statements/MLM_model_2f.txt", 
+                   data = jags_d, n.chains = chains, n.adapt=nadap,
+                   inits = jinits)
+update(mod2, n.iter=nburn)
+out2 <- coda.samples(mod2, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out2, "betas")
+caterpoints(c(Beta))
+WAIC_f2 <- calc_waic(posterior=out2, jags_d)
+
+mod3 <- jags.model(file = "model_statements/MLM_model_3f.txt", 
+                   data = jags_d, n.chains = chains, n.adapt=nadap,
+                   inits = jinits)
+update(mod3, n.iter=nburn)
+out3 <- coda.samples(mod3, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out3, "betas")
+caterpoints(c(Beta))
+WAIC_f3 <- calc_waic(posterior=out3, jags_d)
+
+mod12 <- jags.model(file = "model_statements/MLM_model_12f.txt", 
+                   data = jags_d, n.chains = chains, n.adapt=nadap,
+                   inits = jinits)
+update(mod12, n.iter=nburn)
+out12 <- coda.samples(mod12, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out12, "betas")
+caterpoints(c(Beta))
+WAIC_f12 <- calc_waic(posterior=out12, jags_d)
+
+mod13 <- jags.model(file = "model_statements/MLM_model_13f.txt", 
+                    data = jags_d, n.chains = chains, n.adapt=nadap,
                     inits = jinits)
-  update(mod, n.iter=nburn)
-  out <- coda.samples(mod, n.iter = store*thin, variable.names = params, thin=thin)
-  return(out)
-}
+update(mod13, n.iter=nburn)
+out13 <- coda.samples(mod13, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out13, "betas")
+caterpoints(c(Beta))
+WAIC_f13 <- calc_waic(posterior=out13, jags_d)
 
-bundle <- NULL
-bundle <- list(jags.parsamps[[1]][[1]],
-               jags.parsamps[[2]][[1]],
-               jags.parsamps[[3]][[1]])
+mod23 <- jags.model(file = "model_statements/MLM_model_23f.txt", 
+                    data = jags_d, n.chains = chains, n.adapt=nadap,
+                    inits = jinits)
+update(mod23, n.iter=nburn)
+out23 <- coda.samples(mod23, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out23, "betas")
+caterpoints(c(Beta))
+WAIC_f23 <- calc_waic(posterior=out23, jags_d)
 
-class(bundle) <- "mcmc.list"
+mod123 <- jags.model(file = "model_statements/MLM_model_123f.txt", 
+                    data = jags_d, n.chains = chains, n.adapt=nadap,
+                    inits = jinits)
+update(mod123, n.iter=nburn)
+out123 <- coda.samples(mod123, n.iter = store*thin, variable.names = params, thin=thin)
+caterplot(out123, "betas")
+caterpoints(c(Beta))
+WAIC_f123 <- calc_waic(posterior=out123, jags_d)
 
-stopCluster(cl)
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
+# compare WAIC values
+vals <- c(full = WAIC_0f$WAIC, 
+  fixed1 = WAIC_f1$WAIC, 
+  fixed2=WAIC_f2$WAIC, 
+  fixed3=WAIC_f3$WAIC, 
+  fixed12 = WAIC_f12$WAIC, 
+  fixed23=WAIC_f23$WAIC, 
+  fixed13=WAIC_f13$WAIC,   
+  allfixed=WAIC_f123$WAIC
+  )
+
+plot(factor(names(vals)), vals, type="l", xlab="model", ylab="WAIC")
+
+# correct model is not selected....
+
+
+
+
+
 
 ################################################
 # Check Convergence:
 ################################################
 library(ggmcmc)
 library(mcmcplots)
-alpha.df <- ggs(bundle, family="alpha")
-beta.df <- ggs(bundle, family="betas")
-I.df <- ggs(bundle, family="I")
-sd.beta.df <- ggs(bundle, family="sd.beta")
-p.detect.df <- ggs(bundle, family="p.detect")
+alpha.df <- ggs(out, family="alpha")
+beta.df <- ggs(out, family="betas")
+I.df <- ggs(out, family="I")
+sd.beta.df <- ggs(out, family="sd.beta")
+p.detect.df <- ggs(out, family="p.detect")
 
 ggs_Rhat(alpha.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
 ggs_Rhat(beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
 ggs_Rhat(sd.beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
 ggs_Rhat(p.detect.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
 
-quartz(height=4, width=11)
-x11(height=4, width=11)
-caterplot(bundle, parms="betas", random=50)
+caterplot(out, parms="betas")
 caterpoints(c(Beta))
 
-caterplot(bundle, parms="sd.beta")
-caterpoints(c(1, 0, 0))
+caterplot(out, parms="sd.beta")
+caterpoints(c(1, 0))
 
-ggs_caterpillar(ggs(bundle), family="sd.beta") + 
-  xlim(0, 4) + 
-  theme_classic() + 
-  geom_vline(xintercept=0, linetype="dashed")
 
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
 
 ################################################
 # Check random vs. fixed:
@@ -174,14 +229,12 @@ source(file="HDI.R")
 hdi.sd <- array(0, dim=c(Ncov, 2))
 
 for(i in 1:Ncov){
-  sub <- subset(sd.beta.df.best, Parameter==paste("sd.beta.post[",i,"]",sep=""))$value
-  hdi <- HDI(sub) #HDI of st.dev. for each covariate
-  
-  hdi.sd[i, ] <- hdi
+  sub <- subset(ggs(out), 
+                Parameter==paste("sd.beta[",i,"]", sep="")
+                )$value
+  hdi.sd[i, ] <- HDI(sub) #HDI of st.dev. for each covariate
 }
 hdi.sd
-# The model estimated that only covariate 5 has a fixed effect
-
 
 ################################################
 # Extract 'linear predictor' of the model: logit(psi)
@@ -225,12 +278,12 @@ jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
   return(out)
 }
 
-bundle_norand <- NULL
-bundle_norand <- list(jags.parsamps[[1]][[1]],
+out_norand <- NULL
+out_norand <- list(jags.parsamps[[1]][[1]],
                     jags.parsamps[[2]][[1]],
                     jags.parsamps[[3]][[1]])
 
-class(bundle_norand) <- "mcmc.list"
+class(out_norand) <- "mcmc.list"
 
 stopCluster(cl)
 
@@ -239,10 +292,10 @@ stopCluster(cl)
 ################################################
 library(ggmcmc)
 library(mcmcplots)
-alpha.df.norand <- ggs(bundle_norand, family="alpha")
-beta.df.norand <- ggs(bundle_norand, family="betas")
-p.detect.df.norand <- ggs(bundle_norand, family="p.detect")
-psi.df.norand <- ggs(bundle_norand, family="psi")
+alpha.df.norand <- ggs(out_norand, family="alpha")
+beta.df.norand <- ggs(out_norand, family="betas")
+p.detect.df.norand <- ggs(out_norand, family="p.detect")
+psi.df.norand <- ggs(out_norand, family="psi")
 
 ggs_Rhat(alpha.df.norand)
 ggs_Rhat(beta.df.norand)
@@ -250,8 +303,8 @@ ggs_Rhat(p.detect.df.norand)
 
 quartz(height=4, width=11)
 x11(height=4, width=11)
-caterplot(bundle_norand, parms="betas", horizontal=F)
-caterplot(bundle_norand, parms="alpha", horizontal=F)
+caterplot(out_norand, parms="betas", horizontal=F)
+caterplot(out_norand, parms="alpha", horizontal=F)
 
 ################################################
 # Extract 'linear predictor' of the model: logit(psi)
