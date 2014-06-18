@@ -188,135 +188,60 @@ vals <- c(full = WAIC_0f$WAIC,
   allfixed=WAIC_f123$WAIC
   )
 
+x11(height=4, width=6)
 plot(factor(names(vals)), vals,  
      xlab="model", ylab="WAIC")
 
 # correct model and full model are best supported....
-
-
-
-
-
-
-################################################
-# Check Convergence:
-################################################
-library(ggmcmc)
-library(mcmcplots)
-alpha.df <- ggs(out, family="alpha")
-beta.df <- ggs(out, family="betas")
-I.df <- ggs(out, family="I")
-sd.beta.df <- ggs(out, family="sd.beta")
-p.detect.df <- ggs(out, family="p.detect")
-
-ggs_Rhat(alpha.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
-ggs_Rhat(beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
-ggs_Rhat(sd.beta.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
-ggs_Rhat(p.detect.df) + xlim(.9, 1.2) + geom_vline(xintercept=1.1, linetype="dashed")
-
-caterplot(out, parms="betas")
-caterpoints(c(Beta))
-
-caterplot(out, parms="sd.beta")
-caterpoints(c(1, 0))
-
-
 
 ################################################
 # Check random vs. fixed:
 ################################################
 # If 95 HDI of st.dev. of beta[j] overlaps zero, then fixed effect.
 # (i.e. no significant variability in effect among species)
-
+library(ggmcmc)
 source(file="HDI.R")
+
 hdi.sd <- array(0, dim=c(Ncov, 2))
 
+sd.beta.df <- ggs(out0, family="sd.beta") #look at the full model
+
 for(i in 1:Ncov){
-  sub <- subset(ggs(out), 
+  sub <- subset(sd.beta.df, 
                 Parameter==paste("sd.beta[",i,"]", sep="")
                 )$value
   hdi.sd[i, ] <- HDI(sub) #HDI of st.dev. for each covariate
 }
 hdi.sd
 
+# Covariate 3 is a fixed effect. 
+
 ################################################
-# Extract 'linear predictor' of the model: logit(psi)
+# Extract 'linear predictor' (logit(psi)) of the best model
 ################################################
+psi.best <- ggs(out3, family="psi")
 
 linpred.best <- NULL
 
+
 for(i in 1:Nobs){
-  sub <- subset(psi.df.best, Parameter==paste("psi[", i, "]", sep=""))$value
+  sub <- subset(psi.best, Parameter==paste("psi[", i, "]", sep=""))$value
   sub <- log(sub/(1-sub))
   linpred.best[i] <- mean(sub)
 }
 
-#--------------------------------------------------------------------------
-#--------------------------------------------------------------------------
+#prediction 275 is Inf (i.e. psi=1), so I replaced with a high value on logit scale, 12
+#linpred.best[275] <- 12
 
 ################################################
-# Now fit the model that has NO RANDOM TERMS (i.e. no species-level variability in beta[j]:
+# Extract 'linear predictor' of the model with NO random effects
 ################################################
-# (I deleted most of the data, just to save on space)
-
-# initialize model:
-
-library(doParallel)
-cl <- makeCluster(3)
-registerDoParallel(cl)
-
-jags.parsamps <- NULL
-jags.parsamps <- foreach(i=1:3, .packages=c('rjags','random')) %dopar% {
-  #setwd("C:\Users\Joe\Documents\GitHub\CA_Metacoms")
-  store<-1000
-  nadap<-20000
-  nburn<-50000
-  thin<-50
-  mod <- jags.model(file = "MLM_model_NoRandom.txt", 
-                    data = jags_d_best, n.chains = 1, n.adapt=nadap,
-                    inits = jinits)
-  update(mod, n.iter=nburn)
-  out <- coda.samples(mod, n.iter = store*thin, 
-                      variable.names = params_best, thin=thin)
-  return(out)
-}
-
-out_norand <- NULL
-out_norand <- list(jags.parsamps[[1]][[1]],
-                    jags.parsamps[[2]][[1]],
-                    jags.parsamps[[3]][[1]])
-
-class(out_norand) <- "mcmc.list"
-
-stopCluster(cl)
-
-################################################
-# Check Convergence:
-################################################
-library(ggmcmc)
-library(mcmcplots)
-alpha.df.norand <- ggs(out_norand, family="alpha")
-beta.df.norand <- ggs(out_norand, family="betas")
-p.detect.df.norand <- ggs(out_norand, family="p.detect")
-psi.df.norand <- ggs(out_norand, family="psi")
-
-ggs_Rhat(alpha.df.norand)
-ggs_Rhat(beta.df.norand)
-ggs_Rhat(p.detect.df.norand)
-
-quartz(height=4, width=11)
-x11(height=4, width=11)
-caterplot(out_norand, parms="betas", horizontal=F)
-caterplot(out_norand, parms="alpha", horizontal=F)
-
-################################################
-# Extract 'linear predictor' of the model: logit(psi)
-################################################
+psi.norand <- ggs(out123, family="psi")
 
 linpred.norand <- NULL
 
 for(i in 1:Nobs){
-  sub <- subset(psi.df.norand, Parameter==paste("psi[", i, "]", sep=""))$value
+  sub <- subset(psi.norand, Parameter==paste("psi[", i, "]", sep=""))$value
   sub <- log(sub/(1-sub))
   linpred.norand[i] <- mean(sub)
 }
@@ -344,7 +269,7 @@ mlm.fit <- MLM.fitted.standard %*% U$v
 mlm.fit <- mlm.fit[,1:2]
 
 # environmental variables (only those with significant random effects)
-envir.vars <- Xcov[, c(1:4)]
+envir.vars <- Xcov[, c(1:2)]
 mlm.envir <- NULL
 for(j in 1:ncol(envir.vars)){
   mlm.envir <- cbind(mlm.envir, envir.vars[,j]*mlm.fit[,1],envir.vars[,j]*mlm.fit[,2])
@@ -364,5 +289,5 @@ arrow.coordMLM <- cbind(array(0,dim(envir.points)),-envir.points)
 arrows(arrow.coordMLM[,1],arrow.coordMLM[,2],arrow.coordMLM[,3],arrow.coordMLM[,4], 
        code=2, col="black", length=0.05, lwd=.8)
 
-text(1.3*-envir.points,label=c("Cov1", "Cov2", "Cov3", "Cov4"),cex=1, font=2)
+text(1.3*-envir.points,label=c("Cov1", "Cov2"),cex=1, font=2)
 
